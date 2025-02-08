@@ -84,4 +84,4 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 For questions, suggestions, or collaboration opportunities, feel free to reach out!
 
 ---
-Built by law student with minor in CS
+Built by a law student with minor in CS
