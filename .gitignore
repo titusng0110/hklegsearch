@@ -2,5 +2,5 @@
 *.pem
 __pycache__
 data/output/*
-data/output.csv
+data/corpus.csv
 data/embeddings.parquet
