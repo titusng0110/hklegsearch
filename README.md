@@ -9,9 +9,9 @@ This tool is designed for research purposes only and should not be relied upon a
 
 ## 🌟 Features
 
-- Semantic search across Hong Kong legislation
+- Semantic search across Hong Kong legislation with BGE-M3
 - Preservation of legal document hierarchy and metadata
-- Fast and efficient search using embeddings with faiss
+- Fast and efficient search using embeddings with Faiss
 - Web-based interface for easy access
 
 ## 🚀 Quick Start
