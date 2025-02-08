@@ -1,4 +1,4 @@
-name: /mnt/nvme/lmao
+name: hklegsearch
 channels:
   - pytorch
   - nvidia
@@ -230,4 +230,4 @@ dependencies:
       - xxhash==3.5.0
       - yarl==1.18.3
       - zlib-state==0.1.9
-prefix: /mnt/nvme/lmao
+name: hklegsearch
