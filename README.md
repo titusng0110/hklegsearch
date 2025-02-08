@@ -50,6 +50,8 @@ python big_clean.py  # Processes documents into searchable chunks
 python embed.py      # Generates embeddings for semantic search
 ```
 
+## 🌐 Web Interface
+
 ### 3. SSL Certificate Setup
 Before starting the server, you'll need SSL certificates. You have two options:
 
@@ -70,8 +72,6 @@ Place your existing SSL certificates in the `web` directory:
 # in web/ directory
 python -m gunicorn -c gunicorn.conf.py
 ```
-
-## 🌐 Web Interface
 
 Once the server is running, access the search interface at:
 ```
