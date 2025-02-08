@@ -55,7 +55,8 @@ Before starting the server, you'll need SSL certificates. You have two options:
 
 #### Option A: Generate Self-Signed Certificates
 ```bash
-# Generate self-signed certificates (in the web directory)
+# Generate self-signed certificates
+cd ../web
 openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365
 ```
 
@@ -66,7 +67,7 @@ Place your existing SSL certificates in the `web` directory:
 
 ### 4. Starting the Server
 ```bash
-cd ../web
+# in web/ directory
 python -m gunicorn -c gunicorn.conf.py
 ```
 
