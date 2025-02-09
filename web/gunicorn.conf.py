@@ -7,10 +7,6 @@ bind = '0.0.0.0:30000'
 workers = 1
 threads = 5
 
-# SSL/TLS configuration
-certfile = 'cert.pem'
-keyfile = 'key.pem'
-
 # Logging configuration
 accesslog = '-'  # '-' means log to stdout
 errorlog = '-'   # '-' means log to stderr

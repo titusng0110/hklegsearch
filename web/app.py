@@ -8,11 +8,8 @@ from flask import Flask, request, jsonify, abort, send_file
 # Global constants
 # ------------------------
 MAX_PAYLOAD_LENGTH = 2048         # Maximum characters allowed in the payload
-MIN_REQUEST_INTERVAL = 0.1        # Seconds per IP between requests (rate limiting)
 MAX_QUEUE_LENGTH = 24000          # Reject new requests if the job queue reaches this length
 BATCH_SIZE = 24                   # Process up to 24 items in a batch for the GPU worker
-MAX_REQUESTS_PER_HOUR = 10000     # Maximum requests allowed per IP in a 1-hour window
-BAN_DURATION = 86400              # Ban duration in seconds (24 hours)
 
 # ------------------------
 # Global queue for GPU worker
@@ -20,34 +17,10 @@ BAN_DURATION = 86400              # Ban duration in seconds (24 hours)
 gpu_queue = queue.Queue()
 
 # ------------------------
-# Global dictionaries for rate limiting and banning (protected by a lock)
-# ------------------------
-ip_last_request = {}    # Tracks last request time per IP (for minimum interval)
-ip_request_counter = {} # Tracks count and window start time per IP
-banned_ips = {}         # Maps IP -> ban expiration time (timestamp)
-ip_lock = threading.Lock()
-
-# ------------------------
-# Helper function to extract client IP reliably.
-# ------------------------
-def get_client_ip():
-    """
-    Extract the client IP address. If an X-Forwarded-For header is present,
-    then use its first value; otherwise, use the remote address.
-    """
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        ip = forwarded.split(",")[0].strip()
-    else:
-        ip = request.remote_addr
-    return ip
-
-# ------------------------
 # Job class to hold task state (GPU-based processing)
 # ------------------------
 class Job:
-    def __init__(self, ip, payload):
-        self.ip = ip
+    def __init__(self, payload):
         self.payload = payload
         self.doc_ids = None      # Doc IDs returned from FAISS search
         self.texts = None        # Final texts corresponding to each doc id
@@ -163,15 +136,12 @@ def gpu_worker():
 # ------------------------
 def status_printer():
     """
-    Periodically prints the GPU queue size and IP statistics every 10 seconds.
+    Periodically prints the GPU queue size every 10 seconds.
     """
     while True:
-        with ip_lock:
-            print("----- Status Monitor -----")
-            print("GPU Queue Size:", gpu_queue.qsize())
-            print("Active IPs:", len(ip_last_request))
-            print("Banned IPs:", len(banned_ips))
-            print("--------------------------")
+        print("----- Status Monitor -----")
+        print("GPU Queue Size:", gpu_queue.qsize())
+        print("--------------------------")
         time.sleep(10)
 
 # ------------------------
@@ -186,42 +156,6 @@ def serve_index():
 
 @app.route('/api/', methods=['GET'])
 def handle_request():
-    ip = get_client_ip()
-    now = time.time()
-
-    # Rate limiting and banning logic.
-    with ip_lock:
-        # Check if IP is banned.
-        ban_expiry = banned_ips.get(ip)
-        if ban_expiry and now < ban_expiry:
-            abort(403, description="Your IP is banned for 24 hours due to excessive requests.")
-        elif ban_expiry and now >= ban_expiry:
-            # Ban period is over; remove ban and reset counter.
-            del banned_ips[ip]
-            ip_request_counter.pop(ip, None)
-
-        # Check the minimum interval between requests.
-        last_time = ip_last_request.get(ip, 0)
-        if now - last_time < MIN_REQUEST_INTERVAL:
-            abort(429, description="Too Many Requests: Only one request every 0.1 seconds allowed")
-        ip_last_request[ip] = now
-
-        # Update the per-IP request counter for the sliding 1-hour window.
-        info = ip_request_counter.get(ip)
-        if info is None:
-            ip_request_counter[ip] = {"count": 1, "window_start": now}
-        else:
-            if now - info["window_start"] < 3600:
-                info["count"] += 1
-            else:
-                # Reset the counter and window.
-                info["window_start"] = now
-                info["count"] = 1
-
-            if info["count"] > MAX_REQUESTS_PER_HOUR:
-                banned_ips[ip] = now + BAN_DURATION
-                abort(403, description="Your IP is banned for 24 hours due to excessive requests.")
-
     # Ensure only GET methods are accepted.
     if request.method != 'GET':
         abort(405, description="Method Not Allowed")
@@ -238,7 +172,7 @@ def handle_request():
         abort(503, description="Server busy due to queue overload")
 
     # Create a job and enqueue it in the GPU queue.
-    job = Job(ip, payload)
+    job = Job(payload)
     gpu_queue.put(job)
 
     # Wait until processing is complete (with a timeout safeguard).
@@ -278,6 +212,4 @@ with app.app_context():
 # Standalone Server Execution
 # ------------------------
 if __name__ == '__main__':
-    # HTTPS: Provide paths to your certificate and key files.
-    ssl_context = ('cert.pem', 'key.pem')
-    app.run(debug=False, host='0.0.0.0', port=30000, threaded=True, ssl_context=ssl_context)
+    app.run(debug=False, host='0.0.0.0', port=30000, threaded=True)
