@@ -1,5 +1,4 @@
 *.zip
-*.pem
 __pycache__
 data/output/*
 data/corpus.csv
