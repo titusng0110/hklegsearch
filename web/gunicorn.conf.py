@@ -8,8 +8,8 @@ workers = 1
 threads = 5
 
 # Logging configuration
-accesslog = '-'  # '-' means log to stdout
-errorlog = '-'   # '-' means log to stderr
+accesslog = 'access.log'  # '-' means log to stdout
+errorlog = 'error.log'   # '-' means log to stderr
 
 # The application to load
 wsgi_app = 'app:app'
