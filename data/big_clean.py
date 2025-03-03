@@ -293,7 +293,7 @@ def main():
     
     # Use a thread pool with 4 threads to process files concurrently.
     all_chunks = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         # Map each file to the process_file function.
         future_to_file = {executor.submit(process_file, file_name, encoder): file_name for file_name in files}
         for future in concurrent.futures.as_completed(future_to_file):

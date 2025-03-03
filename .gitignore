@@ -2,6 +2,7 @@
 __pycache__
 data/output/*
 data/corpus.csv
-data/embeddings.parquet
+data/*.parquet
+data/local_gte_qwen
 web/access.log
 web/error.log
