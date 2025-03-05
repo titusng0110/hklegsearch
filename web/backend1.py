@@ -64,7 +64,7 @@ def init():
 
     # Load precomputed embeddings from a parquet file.
     embeddings1 = np.stack(pl.read_parquet("../data/linq_embeddings.parquet")["embedding"].to_numpy()).astype(np.float32)
-    embeddings2 = np.stack(pl.read_parquet("../data/inf_big.parquet")["embedding"].to_numpy()).astype(np.float32)
+    embeddings2 = np.stack(pl.read_parquet("../data/inf_big_embeddings.parquet")["embedding"].to_numpy()).astype(np.float32)
     
     # Initialize FAISS index on CPU.
     cpu_index1 = faiss.index_factory(embeddings1.shape[-1], "Flat", faiss.METRIC_INNER_PRODUCT)
