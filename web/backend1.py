@@ -8,7 +8,7 @@ from flask import Flask, request, jsonify, abort, send_file
 # ------------------------
 MAX_PAYLOAD_LENGTH = 2048         # Maximum characters allowed in the payload
 MAX_QUEUE_LENGTH = 2400          # Reject new requests if the job queue reaches this length
-BATCH_SIZE = 12                   # Number of payloads to process in a batch
+BATCH_SIZE = 6                   # Number of payloads to process in a batch
 TOP_K = 100                        # Number of top results to rerank
 FINAL_TOP_K = 10                  # Number of final results to return
 RRF_K = 60                        # Constant for Reciprocal Rank Fusion
@@ -87,7 +87,7 @@ def create_linq_embedding(payloads):
     )
     return l2_normalize(q_embeddings)
 
-def create_gte_embedding(payloads):
+def create_inf_embedding(payloads):
     """Creates normalized embeddings for a batch of payloads using GTE model."""
     def l2_normalize(vectors):
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
@@ -184,7 +184,7 @@ def embedding_worker():
             embeddings1 = create_linq_embedding(payloads)
             for job, embedding in zip(batch, embeddings1):
                 job.embedding1 = embedding
-            embeddings2 = create_gte_embedding(payloads)
+            embeddings2 = create_inf_embedding(payloads)
             for job, embedding in zip(batch, embeddings2):
                 job.embedding2 = embedding
         except Exception:

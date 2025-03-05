@@ -8,7 +8,7 @@ from flask import Flask, request, jsonify, abort, send_file
 # ------------------------
 MAX_PAYLOAD_LENGTH = 2048         # Maximum characters allowed in the payload
 MAX_QUEUE_LENGTH = 2400          # Reject new requests if the job queue reaches this length
-BATCH_SIZE = 24                   # Number of payloads to process in a batch
+BATCH_SIZE = 12                   # Number of payloads to process in a batch
 TOP_K = 100                        # Number of top results to rerank
 FINAL_TOP_K = 10                  # Number of final results to return
 RRF_K = 60                        # Constant for Reciprocal Rank Fusion
