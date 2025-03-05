@@ -8,14 +8,16 @@ from flask import Flask, request, jsonify, abort, send_file
 # ------------------------
 MAX_PAYLOAD_LENGTH = 2048         # Maximum characters allowed in the payload
 MAX_QUEUE_LENGTH = 2400          # Reject new requests if the job queue reaches this length
-TOP_K = 50                        # Number of top results to return
+BATCH_SIZE = 24                   # Number of payloads to process in a batch
+TOP_K = 100                        # Number of top results to rerank
+FINAL_TOP_K = 10                  # Number of final results to return
+RRF_K = 60                        # Constant for Reciprocal Rank Fusion
 
 # ------------------------
 # Global queues for workers
 # ------------------------
 embed_queue = queue.Queue()         # Queue for initial embedding creation (GPU)
 faiss_queue = queue.Queue()         # Queue for FAISS search operations (CPU)
-rerank_queue = queue.Queue()      # Queue for reranking operations (GPU)
 
 # ------------------------
 # Job class to hold task state
@@ -35,17 +37,14 @@ class Job:
 # Processing Functions
 # ------------------------
 import polars as pl
-from FlagEmbedding import BGEM3FlagModel
 from sentence_transformers import SentenceTransformer
-from FlagEmbedding import LayerWiseFlagLLMReranker
-import torch
 import faiss
+import torch
 import numpy as np
 
 corpus = None
 model1 = None
 model2 = None
-reranker = None
 cpu_index1 = None
 cpu_index2 = None
 
@@ -56,17 +55,16 @@ def init():
     corpus = pl.read_csv("../data/corpus.csv").get_column("text").to_list()
     
     # Initialize the embedding model.
-    model1 = BGEM3FlagModel('BAAI/bge-m3', use_fp16=True, devices=["cuda:1"])
+    model1 = SentenceTransformer("../data/local_inf_small", trust_remote_code=False, device="cuda:3", model_kwargs={ "torch_dtype": torch.bfloat16 })
+    model1.max_seq_length = 1024
     model1.encode(["Hello"])  # Warm-up
-    model2 = SentenceTransformer("Alibaba-NLP/gte-Qwen2-1.5B-instruct", trust_remote_code=True, device="cuda:1", model_kwargs = {"torch_dtype": torch.float16})
+    model2 = SentenceTransformer("../data/local_arctic", trust_remote_code=False, device="cuda:3", model_kwargs={ "torch_dtype": torch.float32 })
     model2.max_seq_length = 1024
     model2.encode(["Hello"])  # Warm-up
-    reranker = LayerWiseFlagLLMReranker('BAAI/bge-reranker-v2-minicpm-layerwise', devices=["cuda:2"], use_fp16=True)
-    reranker.compute_score([["Hello", "Hello"]], cutoff_layers=[28])  # Warm-up
 
     # Load precomputed embeddings from a parquet file.
-    embeddings1 = np.stack(pl.read_parquet("../data/m3_embeddings.parquet")["embedding"].to_numpy()).astype(np.float32)
-    embeddings2 = np.stack(pl.read_parquet("../data/gte_embeddings.parquet")["embedding"].to_numpy()).astype(np.float32)
+    embeddings1 = np.stack(pl.read_parquet("../data/inf_small_embeddings.parquet")["embedding"].to_numpy()).astype(np.float32)
+    embeddings2 = np.stack(pl.read_parquet("../data/arctic_embeddings.parquet")["embedding"].to_numpy()).astype(np.float32)
     
     # Initialize FAISS index on CPU.
     cpu_index1 = faiss.index_factory(embeddings1.shape[-1], "Flat", faiss.METRIC_INNER_PRODUCT)
@@ -75,21 +73,19 @@ def init():
     cpu_index2.add(embeddings2)
     del embeddings1, embeddings2
 
-def create_m3_embedding(payloads):
-    """Creates normalized embeddings for a batch of payloads using M3 model."""
+def create_inf_embedding(payloads):
+    """Creates normalized embeddings for a batch of payloads using GTE model."""
     def l2_normalize(vectors):
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
         return vectors / (norms + 1e-10)
     q_embeddings = model1.encode(
         payloads,
-        max_length=1024,
-        return_dense=True,
-        return_sparse=False,
-        return_colbert_vecs=False
-    )["dense_vecs"]
+        prompt_name="query",
+        show_progress_bar=False
+    )
     return l2_normalize(q_embeddings)
 
-def create_gte_embedding(payloads):
+def create_arctic_embedding(payloads):
     """Creates normalized embeddings for a batch of payloads using GTE model."""
     def l2_normalize(vectors):
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
@@ -105,12 +101,55 @@ def faiss_search(q_embeddings1, q_embeddings2):
     """Perform a FAISS search to retrieve top similar document indices."""
     scores1, indices1 = cpu_index1.search(q_embeddings1.astype(np.float32), k=TOP_K)
     scores2, indices2 = cpu_index2.search(q_embeddings2.astype(np.float32), k=TOP_K)
-    return np.unique(np.concatenate([indices1, indices2], axis=1), axis=1)
+    return scores1, indices1, scores2, indices2
 
-def rerank(query, doc_indices):
-    """Rerank the document indices using a reranker model."""
-    scores = reranker.compute_score([[query, corpus[doc_id]] for doc_id in doc_indices], cutoff_layers=[28])
-    return [doc_id for _, doc_id in sorted(zip(scores, doc_indices), reverse=True)]
+def RRF(indices1, indices2):
+    """
+    Implements Reciprocal Rank Fusion to combine results from two different embeddings.
+    
+    Args:
+        scores1: Similarity scores from first model
+        indices1: Document indices from first model search
+        scores2: Similarity scores from second model
+        indices2: Document indices from second model search
+        k: Constant in the RRF formula (typically 60)
+        
+    Returns:
+        Tuple of (combined_scores, combined_indices) containing the fused results
+    """
+    # Get the first row for each result (since we're processing one query at a time)
+    indices1 = indices1[0]
+    indices2 = indices2[0]
+    
+    # Create a mapping of document ID to its rank position
+    ranks1 = {doc_id: rank for rank, doc_id in enumerate(indices1)}
+    ranks2 = {doc_id: rank for rank, doc_id in enumerate(indices2)}
+    
+    # Collect all unique document IDs from both result sets
+    all_doc_ids = set(indices1) | set(indices2)
+    
+    # Calculate RRF score for each document
+    rrf_scores = {}
+    for doc_id in all_doc_ids:
+        # Get the rank of the document in each list (or assign a large value if not found)
+        rank1 = ranks1.get(doc_id, len(indices1) + 1)  # +1 to ensure it's not 0
+        rank2 = ranks2.get(doc_id, len(indices2) + 1)
+        
+        # Calculate RRF score: the sum of reciprocal ranks with a constant k
+        rrf_score = 1/(RRF_K + rank1) + 1/(RRF_K + rank2)
+        rrf_scores[doc_id] = rrf_score
+    
+    # Sort documents by RRF score in descending order
+    sorted_docs = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+    
+    # Take only the top FINAL_TOP_K documents
+    top_docs = sorted_docs[:FINAL_TOP_K]
+    
+    # Extract document IDs and their scores
+    combined_indices = np.array([[doc_id for doc_id, _ in top_docs]])
+    combined_scores = np.array([[score for _, score in top_docs]])
+    
+    return combined_scores, combined_indices
 
 
 # ------------------------
@@ -119,7 +158,6 @@ def rerank(query, doc_indices):
 
 # GPU worker for creating embeddings (without batching)
 def embedding_worker():
-    BATCH_SIZE = 12
     while True:
         batch = []
         try:
@@ -141,10 +179,10 @@ def embedding_worker():
         
         # Create embeddings
         try:
-            embeddings1 = create_m3_embedding(payloads)
+            embeddings1 = create_inf_embedding(payloads)
             for job, embedding in zip(batch, embeddings1):
                 job.embedding1 = embedding
-            embeddings2 = create_gte_embedding(payloads)
+            embeddings2 = create_arctic_embedding(payloads)
             for job, embedding in zip(batch, embeddings2):
                 job.embedding2 = embedding
         except Exception:
@@ -171,38 +209,21 @@ def faiss_worker():
                 embedding2 = job.embedding2.reshape(1, -1)
                 
                 # Perform FAISS search
-                indices = faiss_search(embedding1, embedding2)[0]  # Get the first (only) result
-                job.doc_indices = indices
+                scores1, indices1, scores2, indices2 = faiss_search(embedding1, embedding2)
                 
-                # Send to reranker queue
-                rerank_queue.put(job)
-            except Exception:
-                error_info = traceback.format_exc()
-                job.exception = error_info
-                job.event.set()
+                # Apply RRF to fuse the results
+                rrf_scores, rrf_indices = RRF(indices1, indices2)
                 
-        except queue.Empty:
-            continue
-
-# GPU worker for reranking - optimized version
-def rerank_worker():
-    while True:
-        try:
-            # Get one job at a time to process immediately, without batching
-            job = rerank_queue.get(timeout=0.02)
-            
-            try:
-                # Rerank the documents
-                reranked_indices = rerank(job.payload, job.doc_indices)
-                job.doc_ids = reranked_indices
+                # Store the fused indices
+                job.doc_indices = rrf_indices[0][:FINAL_TOP_K]  # Get the first row
                 
-                # Get the final texts
-                job.texts = [corpus[doc_id] for doc_id in reranked_indices]
+                # Get the final text results
+                job.texts = [corpus[idx] for idx in job.doc_indices]
+                
             except Exception:
                 error_info = traceback.format_exc()
                 job.exception = error_info
             finally:
-                # Signal completion
                 job.event.set()
                 
         except queue.Empty:
@@ -232,7 +253,7 @@ def handle_request():
         abort(400, description="Payload exceeds maximum allowed length")
 
     # Check for queue overload before accepting a new job.
-    if embed_queue.qsize() >= MAX_QUEUE_LENGTH or faiss_queue.qsize() >= MAX_QUEUE_LENGTH or rerank_queue.qsize() >= MAX_QUEUE_LENGTH:
+    if embed_queue.qsize() >= MAX_QUEUE_LENGTH or faiss_queue.qsize() >= MAX_QUEUE_LENGTH:
         abort(503, description="Server busy due to queue overload")
 
     # Create a job and enqueue it in the GPU queue.
@@ -265,10 +286,6 @@ def start_background_threads():
         # Start FAISS worker (CPU)
         t_faiss = threading.Thread(target=faiss_worker, daemon=True)
         t_faiss.start()
-        
-        # Start reranking worker (GPU)
-        t_rerank = threading.Thread(target=rerank_worker, daemon=True)
-        t_rerank.start()
 
         threads_started = True
         print("Background threads started.")

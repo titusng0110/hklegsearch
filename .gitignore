@@ -3,6 +3,6 @@ __pycache__
 data/output/*
 data/corpus.csv
 data/*.parquet
-data/local_gte_qwen
+data/local_*/
 web/access.log
 web/error.log
