@@ -3,6 +3,7 @@ __pycache__
 data/output/*
 data/corpus.csv
 data/*.parquet
+data/*.faiss
 data/local_*/
 web/access.log
 web/error.log

@@ -50,7 +50,7 @@ cpu_index2 = None
 
 
 def init():
-    global corpus, model1, model2, reranker, cpu_index1, cpu_index2
+    global corpus, model1, model2, cpu_index1, cpu_index2
     # Load corpus texts from CSV.
     corpus = pl.read_csv("../data/corpus.csv").get_column("text").to_list()
     
@@ -61,17 +61,13 @@ def init():
     model2 = SentenceTransformer("../data/local_inf_big", trust_remote_code=False, device="cuda:3", model_kwargs={ "torch_dtype": torch.bfloat16 })
     model2.max_seq_length = 1024
     model2.encode(["Hello"])  # Warm-up
-
-    # Load precomputed embeddings from a parquet file.
-    embeddings1 = np.stack(pl.read_parquet("../data/linq_embeddings.parquet")["embedding"].to_numpy()).astype(np.float32)
-    embeddings2 = np.stack(pl.read_parquet("../data/inf_big_embeddings.parquet")["embedding"].to_numpy()).astype(np.float32)
     
     # Initialize FAISS index on CPU.
-    cpu_index1 = faiss.index_factory(embeddings1.shape[-1], "Flat", faiss.METRIC_INNER_PRODUCT)
-    cpu_index2 = faiss.index_factory(embeddings2.shape[-1], "Flat", faiss.METRIC_INNER_PRODUCT)
-    cpu_index1.add(embeddings1)
-    cpu_index2.add(embeddings2)
-    del embeddings1, embeddings2
+    cpu_index1 = faiss.read_index("../data/linq_index.faiss")
+    cpu_index2 = faiss.read_index("../data/inf_big_index.faiss")
+    cpu_index1.hnsw.efSearch = TOP_K*8
+    cpu_index2.hnsw.efSearch = TOP_K*8
+    
 
 def create_linq_embedding(payloads):
     """Creates normalized embeddings for a batch of payloads using GTE model."""
