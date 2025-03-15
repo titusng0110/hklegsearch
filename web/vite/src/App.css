@@ -3,9 +3,9 @@
   border-radius: 12px;
   padding: 20px;
   width: 80%;
-  min-width: 30vw;
+  min-width: max(300px, 30vw);
   box-shadow: 0 6px 6px rgba(0, 0, 0, 0.1);
-  margin: 12px auto;
+  margin: 16px auto;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -15,7 +15,7 @@ h1 {
   text-align: center;
   color: #333;
   font-size: clamp(1.5rem, 4vw, 2rem); /* Responsive font size */
-  margin-bottom: 1rem;
+  margin: 1rem 0;
 }
 
 textarea {
@@ -26,6 +26,7 @@ textarea {
   border-radius: 8px;
   font-size: clamp(14px, 3vw, 16px); /* Responsive font size */
   box-sizing: border-box; /* Ensure padding doesn't affect width */
+  resize: none; /* Prevent resizing */
 }
 
 textarea:focus {
@@ -50,7 +51,7 @@ button:disabled {
 }
 
 .status {
-  margin-top: 20px;
+  margin-top: 10px;
   font-size: clamp(14px, 3vw, 16px); /* Responsive font size */
 }
 
@@ -58,22 +59,23 @@ button:disabled {
   color: #e53935; 
 }
 
+.success {
+  color: #41bb45;
+}
+
 .loading { 
   color: #007bff; 
 }
 
-.results {
-  margin-top: 20px;
-}
-
 .results h2 {
   font-size: clamp(1.2rem, 3vw, 1.5rem); /* Responsive font size */
+  margin: 10px 0;
 }
 
 .results li {
   background: #f1f1f1;
   padding: 15px;
-  margin: 10px 0;
+  margin-top: 10px;
   border-radius: 6px;
   list-style-type: none;
   font-size: clamp(14px, 3vw, 16px); /* Responsive font size */
@@ -90,15 +92,17 @@ button:disabled {
   .container {
     width: 95%;
     min-width: 80vw;
-    padding: 6px;
-    margin: 10px auto;
+    padding: 10px;
+    margin: 8px auto;
   }
   
   textarea {
     min-height: 80px; /* Slightly smaller height on mobile */
+    padding: 10px;
   }
   
   .results li {
     padding: 10px;
+    margin-top: 10px;
   }
 }
