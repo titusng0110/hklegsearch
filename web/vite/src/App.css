@@ -1,42 +1,104 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+.container {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  width: 80%;
+  min-width: 30vw;
+  box-shadow: 0 6px 6px rgba(0, 0, 0, 0.1);
+  margin: 12px auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+h1 {
   text-align: center;
+  color: #333;
+  font-size: clamp(1.5rem, 4vw, 2rem); /* Responsive font size */
+  margin-bottom: 1rem;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: clamp(14px, 3vw, 16px); /* Responsive font size */
+  box-sizing: border-box; /* Ensure padding doesn't affect width */
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+textarea:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+button {
+  width: 100%;
+  background: #007bff;
+  color: white;
+  padding: clamp(8px, 2vw, 12px); /* Responsive padding */
+  border: none;
+  border-radius: 8px;
+  margin-top: 15px;
+  cursor: pointer;
+  font-size: clamp(14px, 3vw, 16px); /* Responsive font size */
+}
+
+button:disabled {
+  background: #999;
+}
+
+.status {
+  margin-top: 20px;
+  font-size: clamp(14px, 3vw, 16px); /* Responsive font size */
+}
+
+.error { 
+  color: #e53935; 
+}
+
+.loading { 
+  color: #007bff; 
+}
+
+.results {
+  margin-top: 20px;
+}
+
+.results h2 {
+  font-size: clamp(1.2rem, 3vw, 1.5rem); /* Responsive font size */
+}
+
+.results li {
+  background: #f1f1f1;
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 6px;
+  list-style-type: none;
+  font-size: clamp(14px, 3vw, 16px); /* Responsive font size */
+  word-break: break-word; /* Prevent text overflow */
+}
+
+.results ul {
+  padding-left: 0;
+  margin: 0;
+}
+
+/* Add media queries for additional mobile-specific adjustments */
+@media screen and (max-width: 600px) {
+  .container {
+    width: 95%;
+    min-width: 80vw;
+    padding: 6px;
+    margin: 10px auto;
   }
-  to {
-    transform: rotate(360deg);
+  
+  textarea {
+    min-height: 80px; /* Slightly smaller height on mobile */
   }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+  
+  .results li {
+    padding: 10px;
   }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
 }

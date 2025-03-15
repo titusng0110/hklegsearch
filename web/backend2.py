@@ -2,6 +2,7 @@ import threading
 import queue
 import traceback
 from flask import Flask, request, jsonify, abort, send_file
+from flask_cors import CORS
 
 # ------------------------
 # Global constants
@@ -227,11 +228,7 @@ def faiss_worker():
 # Flask App Setup for the API Server
 # ------------------------
 app = Flask(__name__)
-
-@app.route('/', methods=['GET'])
-def serve_index():
-    # Serve index.html from the same directory as this script.
-    return send_file('index.html')
+CORS(app)
 
 @app.route('/api/', methods=['GET'])
 def handle_request():
