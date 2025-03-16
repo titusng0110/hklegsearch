@@ -87,6 +87,12 @@ button:disabled {
   margin: 0;
 }
 
+.results mark {
+  background-color: #fff53e;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
 /* Add media queries for additional mobile-specific adjustments */
 @media screen and (max-width: 600px) {
   .container {
