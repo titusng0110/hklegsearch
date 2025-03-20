@@ -53,10 +53,9 @@ def main():
                     title = (convert_to_sentence_case(link.replace("https://clic.org.hk/en/topics/","")).replace("/", " > ") + f"\n{divs[0].find('h2').get_text()}").strip()
                     text = divs[0].get_text().replace(divs[0].find('h2').get_text(), "")
                     text = "\n".join([line.strip() for line in text.split("\n") if line.strip() != ""])
-                    text = title + "\n" + text
                     texts = splitData(text)
                     for text in texts:
-                        writer.writerow({'id': counter, 'text': text})
+                        writer.writerow({'id': counter, 'text': f"{title}\n{text}"})
                         counter += 1
                 except Exception as e:
                     print(f"Error: {e}")
