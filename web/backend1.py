@@ -53,7 +53,7 @@ cpu_index2 = None
 def init():
     global corpus, model1, model2, cpu_index1, cpu_index2
     # Load corpus texts from CSV.
-    corpus = pl.read_csv("../data/corpus.csv").get_column("text").to_list()
+    corpus = pl.read_csv("../data/corpus_clic.csv").get_column("text").to_list()
     
     # Initialize the embedding model.
     model1 = SentenceTransformer("../data/local_linq", trust_remote_code=False, device="cuda:3", model_kwargs={ "torch_dtype": torch.float16 })
@@ -64,8 +64,8 @@ def init():
     model2.encode(["Hello"])  # Warm-up
     
     # Initialize FAISS index on CPU.
-    cpu_index1 = faiss.read_index("../data/linq_index.faiss")
-    cpu_index2 = faiss.read_index("../data/inf_big_index.faiss")
+    cpu_index1 = faiss.read_index("../data/linq_clic.faiss")
+    cpu_index2 = faiss.read_index("../data/inf_big_clic.faiss")
     cpu_index1.hnsw.efSearch = TOP_K*8
     cpu_index2.hnsw.efSearch = TOP_K*8
     

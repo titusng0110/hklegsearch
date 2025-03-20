@@ -285,6 +285,7 @@ def process_file(file_name, encoder):
     return processed_chunks
 
 def main():
+    output_file = "corpus_leg.csv"
     # Create the encoder for model "gpt-4o" using tiktoken.
     encoder = tiktoken.encoding_for_model("gpt-4o")
     
@@ -310,7 +311,7 @@ def main():
         chunk["id"] = str(idx)
     
     # Write all extracted chunks to a CSV file (one header, then all rows).
-    write_chunks_to_csv(all_chunks, "corpus.csv", write_header=True)
+    write_chunks_to_csv(all_chunks, output_file, write_header=True)
     print(f"Finished writing {len(all_chunks)} chunks to output.csv.")
 
 if __name__ == "__main__":

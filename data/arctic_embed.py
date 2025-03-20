@@ -3,13 +3,16 @@ import numpy as np
 import os
 import torch
 from sentence_transformers import SentenceTransformer
+import sys
 
 def l2_normalize(vectors):
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
     return vectors / (norms + 1e-10)
 
 def main():
-    df = pl.read_csv("corpus.csv").get_column("text").to_list()
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    df = pl.read_csv(input_file).get_column("text").to_list()
     # Define a simpler local path (IMPORTANT: THIS IS TO FIX A BUG WHERE MODEL NAME INCLUDE ".")
     local_model_path = "local_arctic"
 
@@ -36,7 +39,7 @@ def main():
     })
 
     # Save the DataFrame to a Parquet file.
-    df_embeddings.write_parquet("arctic_embeddings.parquet")
+    df_embeddings.write_parquet(output_file)
 
 
 if __name__ == '__main__':
