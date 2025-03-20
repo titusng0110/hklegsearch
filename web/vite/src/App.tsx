@@ -10,41 +10,36 @@ function App() {
   const [status, setStatus] = useState<{ message: string; type?: 'error' | 'loading' | 'success' }>({ message: '' });
   const [results, setResults] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [currentKeywords, setCurrentKeywords] = useState<string[]>([]); // New state for keywords
+  const [currentKeywords, setCurrentKeywords] = useState<string[]>([]);
   const throttleTimerRef = useRef<number | null>(null);
 
-  // Function to process text and get stemmed keywords
   const processQuery = (text: string): string[] => {
-    // Split text into words, convert to lowercase, and remove punctuation
     const words = text.toLowerCase().split(/\W+/);
-    
-    // Filter out stop words and empty strings, then stem remaining words
     return words
       .filter(word => word && !stopWords.includes(word))
       .map(word => stemmer.stemWord(word));
   };
 
-  // Function to highlight keywords in text
   const highlightText = (text: string, keywords: string[]) => {
-    // Create a copy of the text to work with
     let highlightedText = text;
-    
-    // Split the text into words while preserving spaces and punctuation
     const tokens = highlightedText.split(/(\W+)/);
     
-    // Process each token
     const processedTokens = tokens.map(token => {
-      // Skip spaces and punctuation
-      if (token.trim() === '') return token;
-      
-      // Stem the current word
-      const stemmedToken = stemmer.stemWord(token.toLowerCase());
-      
-      // If the stemmed word is in our keywords, highlight the original word
-      if (keywords.includes(stemmedToken)) {
-        return `<mark>${token}</mark>`;
+      // Handle whitespace-only tokens (including newlines)
+      if (token.trim() === '') {
+        return token.replace(/\n/g, '<br />');
       }
-      return token;
+      
+      const stemmedToken = stemmer.stemWord(token.toLowerCase());
+      let processedToken = token;
+      
+      if (keywords.includes(stemmedToken)) {
+        processedToken = `<mark>${token}</mark>`;
+      }
+      
+      // Replace newlines with <br /> in all tokens
+      processedToken = processedToken.replace(/\n/g, '<br />');
+      return processedToken;
     });
 
     return (
@@ -62,7 +57,6 @@ function App() {
       return;
     }
 
-    // Process keywords when submitting
     const newKeywords = processQuery(payload);
     setCurrentKeywords(newKeywords);
 
@@ -122,8 +116,8 @@ function App() {
           <ul>
             {results.map((text, idx) => (
               <li key={idx}>
-                <strong>Document {idx + 1}:</strong>{' '}
-                {highlightText(text, currentKeywords)} {/* Using currentKeywords instead */}
+                <strong>Document {idx + 1}:</strong><br />
+                {highlightText(text, currentKeywords)}
               </li>
             ))}
           </ul>
