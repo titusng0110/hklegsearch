@@ -69,7 +69,7 @@ function App() {
     setStatus({ message: 'Processing your request...', type: 'loading' });
 
     try {
-      const response = await fetch(`/api/?payload=${encodeURIComponent(payload.trim())}`);
+      const response = await fetch(`/api/?type=${encodeURIComponent('leg')}&payload=${encodeURIComponent(payload.trim())}`);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -95,7 +95,7 @@ function App() {
         value={payload}
         onChange={(e) => setPayload(e.target.value)}
         maxLength={2048} 
-        placeholder="Type your query here..." 
+        placeholder="E.g. What are the elements of drink driving?"
       />
       <button 
         onClick={handleSubmit} 

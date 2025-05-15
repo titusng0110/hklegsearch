@@ -7,7 +7,7 @@ def splitData(original):
     text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
         model_name="gpt-4o",
         chunk_size=1024,
-        chunk_overlap=512
+        chunk_overlap=0
     )
     texts = text_splitter.split_text(original)
     return texts
