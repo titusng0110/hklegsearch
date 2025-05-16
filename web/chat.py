@@ -1,29 +1,32 @@
+import os
+import uuid
 import json
 import requests
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 from openai import AzureOpenAI
 from dotenv import load_dotenv
-import os
 
 load_dotenv(override=True)
 
+# Initialize OpenAI client
 client = AzureOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
     azure_endpoint=os.getenv("AZURE_OPENAI_API_ENDPOINT")
 )
 deployment = os.getenv("AZURE_OPENAI_API_DEPLOYMENT_NAME")
-
 RETRIEVE_API_URL = "http://127.0.0.1:30000/api/"
 
-# Map our query "option" to retrieve.py's expected qtype
-OPTION_TO_QTYPE = {
-    "cases": "leg",        # Hong Kong court judgments
-    "ordinances": "clic"   # Hong Kong ordinances
-}
+# In-memory session store
+sessions = {}
 
-def prompt1(interview):
+def prompt1(interview: str) -> str:
     messages = [
-        {"role": "system", "content": "You are an intelligent and logical lawyer providing legal advice on Hong Kong law. Hong Kong law is very similar to UK law."},
+        {
+            "role": "system",
+            "content": "You are an intelligent and logical lawyer providing legal advice on Hong Kong law. Hong Kong law is very similar to UK law."
+        },
         {
             "role": "user",
             "content": f"""Here is an interview between you and the client:
@@ -56,41 +59,75 @@ Area of law #2: trust law
 Potential claims: equitable interest"""
         }
     ]
-    completion = client.chat.completions.create(
-        model=deployment,
-        messages=messages
-    )
-    return completion.choices[0].message.content
+    resp = client.chat.completions.create(model=deployment, messages=messages, temperature=0.4, top_p=0.9)
+    return resp.choices[0].message.content
 
-def prompt2(interview, response1):
+def prompt2(interview: str, response1: str) -> str:
     messages = [
-        {"role": "system", "content": "You are an AI assistant specializing in generating query strings for vector search."},
+        {
+            "role": "system",
+            "content": "You are an AI assistant specializing in generating query strings for vector search."
+        },
         {
             "role": "user",
             "content": f"""{interview}
 {response1}
-Based on the areas of law identified, generate five query strings to search a legal database. The legal database has two options "cases" and "ordinances". "cases" contain all Hong Kong court judgments. "ordinances" contain all Hong Kong Ordinances in effect. Here are some questions for thought. What are the legal doctrine related to the current situation and the potential remedy/claim? What are some legal issues worth exploring? What might be specific about Hong Kong law that you will want to search?
+Based on the areas of law identified, generate five query strings to search a legal database. The legal database has two options "clic" and "leg". "clic" is a community legal information database of these topics: 
+Alternative Dispute Resolution (ADR)
+Anti-discrimination
+Bankruptcy, Individual Voluntary Arrangement, Companies Winding Up
+Business and Commerce
+Civil Case
+Common Traffic Offences
+Competition Law
+Consumer Complaints
+Defamation
+DIY Residential Tenancy Agreement
+Employment Disputes
+Enduring Powers of Attorney
+Family, Matrimonial and Cohabitation
+Freedom of Assembly, Procession, Demonstration (Public Order)
+Hong Kong Legal System
+Immigration
+Insurance
+Intellectual Property
+Landlord & Tenant
+Legal Aid
+Maintenance and Safety of Property
+Medical Treatment, Consent and Withdrawal
+Medical Negligence
+Personal Data Privacy
+Personal Injuries
+Police and Crime
+Probate (Wills & Estate)
+Protection for Investors and Structured Products
+Redevelopment and Acquisition of Property
+Sale and Purchase of Property
+Sexual Offences
+Taxation
+Judicial Review
+"leg" contains all Hong Kong legislations in effect. Here are some questions for thought. What are the legal doctrine related to the current situation and the potential remedy/claim? What are some legal issues worth exploring? What might be specific about Hong Kong law that you will want to search?
 The query strings generated shall encapsule the semantic meaning of the question you want to search. Expand abbreviations (CICT becomes Common Intention Constructive Trust) and remove specific information (Peter becomes Landlord, truck becomes vehicle) to enhance the effect of vector embeddings. As the database only contains Hong Kong law, do NOT include "Hong Kong" in your query. Output in json format, e.g.:
 ```json
 [
-    {{"query": "your query 1", "option": "cases"}},
-    {{"query": "your query 2", "option": "cases"}},
-    {{"query": "your query 3", "option": "ordinances"}},
-    {{"query": "your query 4", "option": "ordinances"}},
-    {{"query": "your query 5", "option": "ordinances"}}
+    {{"query": "Business and Commerce: What are the requirements for forming a private company?", "option": "clic"}},
+    {{"query": "Probate (Wills & Estate): How to make a will?", "option": "clic"}},
+    {{"query": "Civil Case: How to start a proceeding in the Small Claims Tribunal?", "option": "clic"}},
+    {{"query": "What are the elements of drink driving?", "option": "leg"}},
+    {{"query": "When does ownership of goods pass from seller to buyer?", "option": "leg"}}
 ]
 ```"""
         }
     ]
-    completion = client.chat.completions.create(
-        model=deployment,
-        messages=messages
-    )
-    return completion.choices[0].message.content
+    resp = client.chat.completions.create(model=deployment, messages=messages, temperature=0.4, top_p=0.9)
+    return resp.choices[0].message.content
 
-def prompt3(interview, response1, search_results):
+def prompt3(interview: str, response1: str, search_results: str) -> str:
     messages = [
-        {"role": "system", "content": "You are an intelligent and logical AI legal assistant providing legal advice on Hong Kong law."},
+        {
+            "role": "system",
+            "content": "You are an intelligent and logical AI legal assistant providing legal advice on Hong Kong law."
+        },
         {
             "role": "user",
             "content": f"""Interview:
@@ -99,75 +136,114 @@ Initial Analysis:
 {response1}
 Legal Sources:
 {search_results}
-Based only on the information given (legal sources might be irrelevant, be careful), write a detailed legal advice directly to the client in complete sentences. You must mention the relevant facts, a thorough explanation, and next steps the client should take. In your explanation, mention what the law is, analyze the law to the facts, and explain step by step the analysis to the layman client. Avoid legal jargon, explain as if the client is a high school student."""
+Based only on the information given (legal sources might be irrelevant, be careful), write a detailed legal advice directly to the client in complete sentences. You must mention the relevant facts, a thorough explanation, and next steps the client should take. In your explanation, mention what the law is, apply the law to the facts, and explain step by step the analysis to the layman client. Avoid legal jargon, explain as if the client is a high school student. Sign yourself as "CLIC-Chat 3.0". Do not address yourself as a lawyer or a legal professional. Do not provide further assistance other than the legal advice. Do not add any disclaimers."""
         }
     ]
-    completion = client.chat.completions.create(
-        model=deployment,
-        messages=messages
-    )
-    return completion.choices[0].message.content
+    resp = client.chat.completions.create(model=deployment, messages=messages, temperature=0.4, top_p=0.9)
+    return resp.choices[0].message.content
 
-def call_retrieve_api(query_text, option):
-    """Call retrieve.py's Flask API and return the list of retrieved texts."""
-    qtype = OPTION_TO_QTYPE.get(option)
-    if not qtype:
-        raise ValueError(f"Unknown option '{option}' for retrieval")
+def call_retrieve_api(query_text: str, option: str, number: int = 5):
     resp = requests.get(
         RETRIEVE_API_URL,
-        params={"payload": query_text, "type": qtype, "number": 5},
+        params={"payload": query_text, "type": option, "number": str(number)},
         timeout=30
     )
     resp.raise_for_status()
     data = resp.json()
-    # data is {"texts": [...]} 
-    return data["texts"]
+    return data.get("texts", [])
 
-if __name__ == "__main__":
-    # Start initial greeting
-    interview = "You: Hello, how can I help you?\n"
-    print("GPT: Hello, how can I help you?")
-    response1 = ""
+# Flask app
+app = Flask(__name__)
+CORS(app)
 
-    # Phase 1: interactive Q&A until "Information Complete"
-    while True:
-        client_input = input("Client: ")
-        interview += f"Client: {client_input}\n"
-        full_resp = prompt1(interview)
-        if full_resp.startswith("Information Complete:"):
-            # Strip the header and break
-            response1 = full_resp.replace("Information Complete:", "").strip()
-            break
-        else:
-            # Ask the follow-up question
-            followup = full_resp.replace("Information Incomplete:", "").strip()
-            print(f"GPT: {followup}")
-            interview += f"You: {followup}\n"
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json(force=True)
+    session_id = data.get("session_id")
+    message = data.get("message")
+    if not message:
+        return jsonify(error="`message` is required"), 400
 
-    print("\n--- Full Interview ---")
-    print(interview)
-    print("\n--- Initial Analysis ---")
-    print(response1)
+    # New session
+    if not session_id:
+        session_id = uuid.uuid4().hex
+        sessions[session_id] = {
+            "interview": "You: Hello, how can I help you?\n",
+            "response1": None
+        }
+    if session_id not in sessions:
+        return jsonify(error="Invalid session_id"), 400
 
-    # Phase 2: generate queries
-    raw_qs = prompt2(interview, response1)
-    print("\n--- Generated Queries (raw) ---")
-    print(raw_qs)
+    state = sessions[session_id]
+    # Append client message
+    state["interview"] += f"Client: {message}\n"
+    full_resp = prompt1(state["interview"])
 
-    # Load JSON array of {query, option}
-    queries = json.loads(raw_qs.replace("```json", "").replace("```", ""))
-    # Phase 3: retrieve for each query via HTTP
+    if full_resp.startswith("Information Complete:"):
+        # Final analysis
+        analysis = full_resp.replace("Information Complete:", "").strip()
+        state["response1"] = analysis
+        return jsonify(session_id=session_id, reply=analysis, complete=True)
+    else:
+        # Need more info
+        followup = full_resp.replace("Information Incomplete:", "").strip()
+        state["interview"] += f"You: {followup}\n"
+        return jsonify(session_id=session_id, reply=followup, complete=False)
+
+@app.route("/queries", methods=["POST"])
+def queries():
+    data = request.get_json(force=True)
+    session_id = data.get("session_id")
+    if not session_id or session_id not in sessions:
+        return jsonify(error="Invalid or missing session_id"), 400
+    state = sessions[session_id]
+    if not state.get("response1"):
+        return jsonify(error="Chat phase not complete"), 400
+
+    raw = prompt2(state["interview"], state["response1"])
+    # strip markdown fences if any
+    clean = raw.strip()
+    if clean.startswith("```"):
+        # Remove first line
+        clean = "\n".join(clean.split("\n")[1:])
+    clean = clean.rstrip("```").strip()
+    try:
+        queries = json.loads(clean)
+    except Exception as e:
+        return jsonify(error=f"Failed to parse queries JSON: {e}", raw=raw), 500
+
+    state["queries"] = queries
+    return jsonify(queries=queries)
+
+@app.route("/search", methods=["POST"])
+def search():
+    data = request.get_json(force=True)
+    queries = data.get("queries")
+    if not isinstance(queries, list):
+        return jsonify(error="`queries` must be a list"), 400
+
     all_texts = []
     for q in queries:
         texts = call_retrieve_api(q["query"], q["option"])
         all_texts.append(texts)
 
-    # Flatten or keep nested depending on prompt3 expectation
-    search_results = json.dumps(all_texts, ensure_ascii=False, indent=2)
-    print("\n--- Retrieved Texts ---")
-    print(search_results)
+    return jsonify(search_results=all_texts)
 
-    # Phase 4: final advice
-    response3 = prompt3(interview, response1, search_results)
-    print("\nGPT (Legal Advice):")
-    print(response3)
+@app.route("/advice", methods=["POST"])
+def advice():
+    data = request.get_json(force=True)
+    session_id = data.get("session_id")
+    search_results = data.get("search_results")
+    if not session_id or session_id not in sessions:
+        return jsonify(error="Invalid or missing session_id"), 400
+    if search_results is None:
+        return jsonify(error="Missing `search_results`"), 400
+
+    state = sessions[session_id]
+    # Format search_results as JSON string for the prompt
+    sr_text = json.dumps(search_results, ensure_ascii=False, indent=2)
+    final_advice = prompt3(state["interview"], state["response1"], sr_text)
+    return jsonify(advice=final_advice)
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=30001, threaded=True)

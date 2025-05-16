@@ -1,42 +1,156 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+.container {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  width: 90%;
+  min-width: 90vw;
+  box-shadow: 0 6px 6px rgba(0, 0, 0, 0.1);
+  margin: 16px auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  /* Remove max-height, instead use height: */
+  height: calc(100vh - 32px);
+}
+
+h1 {
+  text-align: center;
+  color: #333;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  margin-bottom: 1rem;
+  margin-top: 0;
+}
+
+.disclaimer {
+  font-size: clamp(0.8rem, 2vw, 1rem);
+  color: #ff0000;
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.chatWindow {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  background: #f9f9f9;
+}
+
+.message {
+  max-width: 75%;
+  padding: 10px 15px;
+  margin-bottom: 15px;
+  border-radius: 12px;
+  word-break: break-word;
+}
+
+.chatWindow > .message:nth-last-of-type(2) {
+  margin-bottom: 0;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: #007bff;
+  color: white;
+}
+
+.message.assistant {
+  align-self: flex-start;
+  background: #e0e0e0;
+  color: #333;
+}
+
+.message p {
+  margin: 0 0 8px 0;
+}
+.message p:last-child {
+  margin-bottom: 0;
+}
+
+.inputRow {
+  display: flex;
+  flex-direction: row;
+  gap: 8px; /* Optional: space between textarea and button */
+  align-items: stretch;
+}
+
+.inputRow textarea {
+  flex: 9 1 0%;
+  min-width: 0; /* Prevent overflow */
+  margin-bottom: 0; /* Remove margin if present */
+}
+
+.inputRow button {
+  flex: 1 1 0%;
+  min-width: 0;
+  margin-bottom: 0;
+  /* Optionally make button fill the height of textarea: */
+  height: auto;
+  align-self: stretch;
+}
+
+textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: clamp(14px, 3vw, 16px);
+  resize: none;
+  box-sizing: border-box;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+button {
+  width: 100%;
+  background: #007bff;
+  color: white;
+  padding: clamp(8px, 2vw, 12px);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: clamp(14px, 3vw, 16px);
+}
+
+button:disabled {
+  background: #999;
+  cursor: not-allowed;
+}
+
+.status {
+  margin-top: 10px;
+  font-size: clamp(14px, 3vw, 16px);
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.status.error {
+  color: #e53935;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+.status.loading {
+  color: #007bff;
+}
+
+@media screen and (max-width: 600px) {
+  .container {
+    width: 95%;
+    min-width: 95vw;
+    padding: 10px;
+    margin: 8px auto;
+    height: calc(100vh - 16px);
   }
-  to {
-    transform: rotate(360deg);
+
+  textarea {
+    min-height: 100px;
+    padding: 10px;
   }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
 }
