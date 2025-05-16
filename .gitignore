@@ -5,3 +5,4 @@ data/*.csv
 data/*.parquet
 data/*.faiss
 data/local_*/
+.env

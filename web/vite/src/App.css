@@ -3,7 +3,7 @@
   border-radius: 12px;
   padding: 20px;
   width: 80%;
-  min-width: max(300px, 30vw);
+  min-width: max(590px, 50vw);
   box-shadow: 0 6px 6px rgba(0, 0, 0, 0.1);
   margin: 16px auto;
   display: flex;
@@ -97,13 +97,13 @@ button:disabled {
 @media screen and (max-width: 600px) {
   .container {
     width: 95%;
-    min-width: 80vw;
+    min-width: 95vw;
     padding: 10px;
     margin: 8px auto;
   }
   
   textarea {
-    min-height: 80px; /* Slightly smaller height on mobile */
+    min-height: 140px;
     padding: 10px;
   }
   

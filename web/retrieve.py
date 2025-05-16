@@ -8,11 +8,11 @@ from flask_cors import CORS
 # Global constants
 # ------------------------
 MAX_PAYLOAD_LENGTH = 2048
-MAX_QUEUE_LENGTH = 2400
-BATCH_SIZE = 6
-TOP_K = 100
-FINAL_TOP_K = 20
-RRF_K = 60
+MAX_QUEUE_LENGTH   = 2400
+BATCH_SIZE         = 6
+TOP_K              = 100    # how many to retrieve from each FAISS index
+FINAL_TOP_K        = 20     # default & maximum number of results to return
+RRF_K              = 60
 
 # ------------------------
 # Global queues for workers
@@ -24,15 +24,16 @@ faiss_queue = queue.Queue()
 # Job class to hold task state
 # ------------------------
 class Job:
-    def __init__(self, payload, query_type):
-        self.payload = payload
-        self.query_type = query_type  # "leg" or "clic"
-        self.embedding1 = None
-        self.embedding2 = None
+    def __init__(self, payload, query_type, num_results):
+        self.payload     = payload
+        self.query_type  = query_type  # "leg" or "clic"
+        self.num_results = num_results
+        self.embedding1  = None
+        self.embedding2  = None
         self.doc_indices = None
-        self.texts = None
-        self.exception = None
-        self.event = threading.Event()
+        self.texts       = None
+        self.exception   = None
+        self.event       = threading.Event()
 
 # ------------------------
 # Processing Functions
@@ -49,9 +50,9 @@ corpus_clic = None
 model1 = None
 model2 = None
 cpu_index_linq_leg = None
-cpu_index_inf_leg = None
+cpu_index_inf_leg  = None
 cpu_index_linq_clic = None
-cpu_index_inf_clic = None
+cpu_index_inf_clic  = None
 
 def init():
     global corpus_leg, corpus_clic
@@ -60,7 +61,7 @@ def init():
     global cpu_index_linq_clic, cpu_index_inf_clic
 
     # Load corpora
-    corpus_leg = pl.read_csv("../data/corpus_leg.csv").get_column("text").to_list()
+    corpus_leg  = pl.read_csv("../data/corpus_leg.csv").get_column("text").to_list()
     corpus_clic = pl.read_csv("../data/corpus_clic.csv").get_column("text").to_list()
 
     # Load embedding models
@@ -114,9 +115,10 @@ def faiss_search(q1, q2, idx1, idx2):
     s2, i2 = idx2.search(q2.astype(np.float32), k=TOP_K)
     return s1, i1, s2, i2
 
-def RRF(indices1, indices2):
+def RRF(indices1, indices2, k):
     indices1 = indices1[0]
     indices2 = indices2[0]
+    # rank maps
     ranks1 = {doc: rank for rank, doc in enumerate(indices1)}
     ranks2 = {doc: rank for rank, doc in enumerate(indices2)}
     all_docs = set(indices1) | set(indices2)
@@ -125,7 +127,8 @@ def RRF(indices1, indices2):
         r1 = ranks1.get(doc, len(indices1) + 1)
         r2 = ranks2.get(doc, len(indices2) + 1)
         rrf_scores[doc] = 1/(RRF_K + r1) + 1/(RRF_K + r2)
-    sorted_docs = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:FINAL_TOP_K]
+    # take top‐k
+    sorted_docs = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:k]
     combined_indices = np.array([[doc for doc, _ in sorted_docs]])
     combined_scores  = np.array([[score for _, score in sorted_docs]])
     return combined_scores, combined_indices
@@ -174,17 +177,18 @@ def faiss_worker():
         try:
             e1 = job.embedding1.reshape(1, -1)
             e2 = job.embedding2.reshape(1, -1)
-            # Select indexes & corpus
+            # select indexes & corpus
             if job.query_type == "leg":
                 idx1, idx2, corpus = cpu_index_linq_leg, cpu_index_inf_leg, corpus_leg
             else:  # "clic"
                 idx1, idx2, corpus = cpu_index_linq_clic, cpu_index_inf_clic, corpus_clic
 
-            s1, i1, s2, i2 = faiss_search(e1, e2, idx1, idx2)
-            rrf_scores, rrf_indices = RRF(i1, i2)
-            top_idxs = rrf_indices[0][:FINAL_TOP_K]
+            _, i1, _, i2 = faiss_search(e1, e2, idx1, idx2)
+            # RRF with dynamic k
+            _, rrf_indices = RRF(i1, i2, job.num_results)
+            top_idxs = rrf_indices[0]
             job.doc_indices = top_idxs
-            job.texts = [corpus[i] for i in top_idxs]
+            job.texts       = [corpus[i] for i in top_idxs]
         except Exception:
             job.exception = traceback.format_exc()
         finally:
@@ -200,16 +204,28 @@ CORS(app)
 def handle_request():
     payload = request.args.get("payload")
     qtype   = request.args.get("type")
+    num_str = request.args.get("number", str(FINAL_TOP_K))
+
     if payload is None:
         abort(400, description="Missing 'payload' parameter")
     if len(payload) > MAX_PAYLOAD_LENGTH:
         abort(400, description="Payload too long")
     if qtype not in ("leg", "clic"):
         abort(400, description="Invalid 'type'; must be 'leg' or 'clic'")
+
+    # Validate 'number' param
+    try:
+        number = int(num_str)
+    except ValueError:
+        abort(400, description="'number' must be an integer")
+    if not (1 <= number <= FINAL_TOP_K):
+        abort(400, description=f"'number' must be between 1 and {FINAL_TOP_K}")
+
+    # Back‐pressure
     if embed_queue.qsize() >= MAX_QUEUE_LENGTH or faiss_queue.qsize() >= MAX_QUEUE_LENGTH:
         abort(503, description="Server busy")
 
-    job = Job(payload, qtype)
+    job = Job(payload, qtype, num_results=number)
     embed_queue.put(job)
 
     if not job.event.wait(timeout=60):

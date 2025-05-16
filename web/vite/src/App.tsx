@@ -4,8 +4,21 @@ import SnowballEn from './SnowballEn.js';
 
 function App() {
   const stemmer = new SnowballEn();
-  const stopWords = ["ever", "hardly", "hence", "into", "nor", "were", "viz", "all", "also", "am", "an", "and", "any", "are", "as", "at", "be", "because", "been", "could", "did", "do", "does", "e.g.", "from", "had", "has", "have", "having", "he", "her", "here", "hereby", "herein", "hereof", "hereon", "hereto", "herewith", "him", "his", "however", "i.e.", "if", "is", "it", "its", "me", "of", "on", "onto", "or", "our", "really", "said", "she", "should", "so", "some", "such", "than", "that", "the", "their", "them", "then", "there", "thereby", "therefore", "therefrom", "therein", "thereof", "thereon", "thereto", "therewith", "these", "they", "this", "those", "thus", "to", "too", "unto", "us", "very", "was", "we", "what", "when", "where", "whereby", "wherein", "whether", "which", "who", "whom", "whose", "why", "with", "would", "you"]; // lexisnexis stop words
-  
+  const stopWords = [
+    "ever", "hardly", "hence", "into", "nor", "were", "viz", "all", "also",
+    "am", "an", "and", "any", "are", "as", "at", "be", "because", "been",
+    "could", "did", "do", "does", "e.g.", "from", "had", "has", "have",
+    "having", "he", "her", "here", "hereby", "herein", "hereof", "hereon",
+    "hereto", "herewith", "him", "his", "however", "i.e.", "if", "is", "it",
+    "its", "me", "of", "on", "onto", "or", "our", "really", "said", "she",
+    "should", "so", "some", "such", "than", "that", "the", "their", "them",
+    "then", "there", "thereby", "therefore", "therefrom", "therein", "thereof",
+    "thereon", "thereto", "therewith", "these", "they", "this", "those",
+    "thus", "to", "too", "unto", "us", "very", "was", "we", "what", "when",
+    "where", "whereby", "wherein", "whether", "which", "who", "whom", "whose",
+    "why", "with", "would", "you"
+  ]; // lexisnexis stop words
+
   const [payload, setPayload] = useState('');
   const [status, setStatus] = useState<{ message: string; type?: 'error' | 'loading' | 'success' }>({ message: '' });
   const [results, setResults] = useState<string[]>([]);
@@ -21,37 +34,24 @@ function App() {
   };
 
   const highlightText = (text: string, keywords: string[]) => {
-    let highlightedText = text;
-    const tokens = highlightedText.split(/(\W+)/);
-    
-    const processedTokens = tokens.map(token => {
-      // Handle whitespace-only tokens (including newlines)
+    const tokens = text.split(/(\W+)/).map(token => {
       if (token.trim() === '') {
         return token.replace(/\n/g, '<br />');
       }
-      
-      const stemmedToken = stemmer.stemWord(token.toLowerCase());
-      let processedToken = token;
-      
-      if (keywords.includes(stemmedToken)) {
-        processedToken = `<mark>${token}</mark>`;
+      const stemmed = stemmer.stemWord(token.toLowerCase());
+      let out = stopWords.includes(token.toLowerCase()) ? token : token;
+      if (keywords.includes(stemmed)) {
+        out = `<mark>${token}</mark>`;
       }
-      
-      // Replace newlines with <br /> in all tokens
-      processedToken = processedToken.replace(/\n/g, '<br />');
-      return processedToken;
+      return out.replace(/\n/g, '<br />');
     });
-
-    return (
-      <span dangerouslySetInnerHTML={{ __html: processedTokens.join('') }} />
-    );
+    return <span dangerouslySetInnerHTML={{ __html: tokens.join('') }} />;
   };
 
   const handleSubmit = async () => {
     if (throttleTimerRef.current) return;
-    
+
     setResults([]);
-    
     if (!payload.trim()) {
       setStatus({ message: 'Please enter a query.', type: 'error' });
       return;
@@ -70,46 +70,46 @@ function App() {
 
     try {
       const response = await fetch(`/api/?type=${encodeURIComponent('leg')}&payload=${encodeURIComponent(payload.trim())}`);
-      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText);
       }
-      
       const data = await response.json();
-      
       setStatus({ message: 'Request successful!', type: 'success' });
-      
-      if (data?.texts) {
-        setResults(data.texts);
-      }
+      if (data?.texts) setResults(data.texts);
     } catch (err) {
       setStatus({ message: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`, type: 'error' });
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Submit on Enter (without Shift); allow Shift+Enter for new line
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!isSubmitting) handleSubmit();
     }
   };
 
   return (
     <div className="container">
       <h1>Query Search</h1>
-      <textarea 
+      <textarea
         value={payload}
-        onChange={(e) => setPayload(e.target.value)}
-        maxLength={2048} 
-        placeholder="E.g. What are the elements of drink driving?"
+        onChange={e => setPayload(e.target.value)}
+        onKeyDown={handleKeyDown}
+        maxLength={2048}
+        placeholder={`E.g. What are the elements of drink driving?
+When does ownership of goods pass from seller to buyer?
+What are the legal requirements for forming a private company in Hong Kong?`}
       />
-      <button 
-        onClick={handleSubmit} 
-        disabled={isSubmitting}
-      >
+      <button onClick={handleSubmit} disabled={isSubmitting}>
         Submit
       </button>
-      
+
       <div className="status">
-        {status.message && (
-          <span className={status.type}>{status.message}</span>
-        )}
+        {status.message && <span className={status.type}>{status.message}</span>}
       </div>
-      
+
       {results.length > 0 && (
         <div className="results">
           <h2>Results:</h2>
